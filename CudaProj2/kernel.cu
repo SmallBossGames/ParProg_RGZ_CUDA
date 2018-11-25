@@ -21,24 +21,21 @@ __device__ bool isPrime(long long value)
 
 __global__ void getSimpleDividersKernel(char *output, long long from, long long value, int step)
 {
-	const long long currentDefault = threadIdx.x + from;
+	const long long current = threadIdx.x + from + step * blockIdx.x;
 
-	for (long long i = currentDefault; i <= value; i+=step)
+	long long outPos = current - from;
+
+	output[outPos] = 0;
+
+	if (value%current == 0 && isPrime(current))
 	{
-		long long tempVal = value;
-		long long outPos = i - from;
-
-		output[outPos] = 0;
-
-		if (tempVal%i == 0 && isPrime(i))
+		while (value%current == 0)
 		{
-			while (tempVal%i == 0)
-			{
-				output[outPos]++;
-				tempVal /= i;
-			}
+			output[outPos]++;
+			value /= current;
 		}
 	}
+	
 }
 
 
@@ -78,7 +75,7 @@ int main()
 
 	for (auto item : result)
 	{
-		std::cout << (long long) item << ' ';
+		std::cout << item << ' ';
 	}
 
     return 0;
@@ -88,6 +85,7 @@ cudaError_t findSimpleDividersWithCUDA(std::forward_list<long long> *result, lon
 {
 	const long long from = 2;
 	const long long buferSize = value - from;
+	const long long blockCount = (buferSize / cudaCores) + (buferSize%cudaCores == 0 ? 0 : 1);
 
 	if (buferSize < cudaCores)
 	{
@@ -115,7 +113,7 @@ cudaError_t findSimpleDividersWithCUDA(std::forward_list<long long> *result, lon
 	}
 
 
-	getSimpleDividersKernel <<<1, cudaCores >>> (dev_output, from, value, cudaCores);
+	getSimpleDividersKernel <<<blockCount, cudaCores >>> (dev_output, from, value, cudaCores);
 
 	cudaStatus = cudaGetLastError();
 	if (cudaStatus != cudaSuccess) {
