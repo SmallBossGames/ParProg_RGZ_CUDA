@@ -5,10 +5,11 @@
 #include <cmath>
 #include <iostream>
 #include <forward_list>
+#include <chrono>
 
 
 cudaError_t addWithCuda(int *c, const int *a, const int *b, unsigned int size);
-cudaError_t findSimpleDividersWithCUDA(std::forward_list<int> *result, int value, int cudaCores);
+cudaError_t findSimpleDividersWithCUDA(std::forward_list<long> *result, long long value, int cudaCores);
 
 __global__ void addKernel(int *c, const int *a, const int *b)
 {
@@ -17,7 +18,7 @@ __global__ void addKernel(int *c, const int *a, const int *b)
 }
 
 
-__device__ bool isPrime(int value)
+__device__ bool isPrime(long long value)
 {
 	for (int i = 2; i <= sqrt((double) value); i++)
 	{
@@ -27,12 +28,12 @@ __device__ bool isPrime(int value)
 	return true;
 }
 
-__global__ void getSimpleDividersKernel(char *output, int from, int value)
+__global__ void getSimpleDividersKernel(char *output, long long from, long long value)
 {
 	cudaError_t status;
 
 	unsigned int i = threadIdx.x;
-	int current = i + from;
+	long long current = i + from;
 
 	output[i] = 0;
 
@@ -51,13 +52,16 @@ __global__ void getSimpleDividersKernel(char *output, int from, int value)
 
 int main()
 {
+	using namespace std;
 
 	char *outputArray = nullptr;
 	int value;
-	std::forward_list<int> result;
+	std::forward_list<long> result;
 
 	std::cout << "Write value:" << std::endl;
 	std::cin >> value;
+
+	auto begin = chrono::high_resolution_clock::now();
 
     // Add vectors in parallel.
 	cudaError_t cudaStatus = findSimpleDividersWithCUDA(&result, value, 1000);
@@ -66,7 +70,11 @@ int main()
         return 1;
     }
 
-    printf("its done!");
+	auto end = chrono::high_resolution_clock::now();
+
+	auto run_time = chrono::duration_cast<chrono::milliseconds>(end - begin).count();
+
+	cout << "It's done in " << run_time << "ms" << endl;
 
     // cudaDeviceReset must be called before exiting in order for profiling and
     // tracing tools such as Nsight and Visual Profiler to show complete traces.
@@ -164,7 +172,7 @@ Error:
     return cudaStatus;
 }
 
-cudaError_t findSimpleDividersWithCUDA(std::forward_list<int> *result, int value, int cudaCores)
+cudaError_t findSimpleDividersWithCUDA(std::forward_list<long> *result, long long value, int cudaCores)
 {
 	const int from = 2;
 	const int buferSize = value > cudaCores ? cudaCores : value - from;
@@ -192,7 +200,7 @@ cudaError_t findSimpleDividersWithCUDA(std::forward_list<int> *result, int value
 
 	for (int i = 0; i < divCount; i++)
 	{
-		int start = i * buferSize + from;
+		long long start = i * buferSize + from;
 		int taskCount = (i == divCount - 1) ? value - start : buferSize;
 		
 		
@@ -223,14 +231,14 @@ cudaError_t findSimpleDividersWithCUDA(std::forward_list<int> *result, int value
 			int itCount = (int)buffer_output[j];
 			for (int k = 0; k < itCount; k++)
 			{
-				int tempValue = start + j;
+				long long tempValue = start + j;
 				result->push_front(tempValue);
 			}
 		}
 	}
 
 Error:
-	
+	delete[] buffer_output;
 	cudaFree(dev_output);
 
 	return cudaStatus;
